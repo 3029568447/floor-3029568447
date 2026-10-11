@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#08040f" />
+  <meta name="description" content="用摄像头识别手部 21 个关键点，握拳花苞闭合、张手粒子绽放的 Three.js 交互作品" />
+  <title>指尖花开 · 手势控制花朵绽放</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- ===================== 1. 摄像头画面（背景层，CSS 镜像） ===================== -->
+  <video id="video" playsinline autoplay muted></video>
+
+  <!-- ===================== 2. 手部关键点连线（2D 叠加层） ===================== -->
+  <canvas id="overlay"></canvas>
+
+  <!-- ===================== 3. Three.js 粒子花朵（WebGL 层） ===================== -->
+  <canvas id="scene"></canvas>
+
+  <!-- 暗角，让粒子辉光更突出 -->
+  <div id="vignette"></div>
+
+  <!-- ===================== 4. HUD 数据面板 ===================== -->
+  <header id="hud">
+    <div class="hud-title">
+      <span class="dot"></span>
+      <h1>指尖花开</h1>
+      <small>Gesture Bloom</small>
+    </div>
+
+    <div class="hud-rows">
+      <div class="hud-row">
+        <label>摄像头</label>
+        <span id="statCamera" class="val">初始化中…</span>
+      </div>
+      <div class="hud-row">
+        <label>手部</label>
+        <span id="statHand" class="val">等待检测</span>
+      </div>
+      <div class="hud-row">
+        <label>模式</label>
+        <span id="statMode" class="val">—</span>
+      </div>
+      <div class="hud-row">
+        <label>形态</label>
+        <span id="statShape" class="val">—</span>
+      </div>
+      <div class="hud-row">
+        <label>链路</label>
+        <span id="statChain" class="val">—</span>
+      </div>
+      <div class="hud-row">
+        <label>FPS</label>
+        <span id="statFps" class="val">—</span>
+      </div>
+    </div>
+
+    <!-- tension：0 = 握拳，1 = 完全张开 -->
+    <div class="meter">
+      <div class="meter-head">
+        <span>tension 张开度</span><b id="tensionVal">0.00</b>
+      </div>
+      <div class="meter-track">
+        <div id="tensionBar" class="meter-fill tension"></div>
+        <!-- 阈值刻度：0.32 / 0.66 -->
+        <i class="tick" style="left:32%"></i>
+        <i class="tick" style="left:66%"></i>
+      </div>
+      <div class="meter-foot"><span>握拳 0</span><span>阈值 0.32 / 0.66</span><span>张开 1</span></div>
+    </div>
+
+    <!-- spread：缓动后的绽放程度 -->
+    <div class="meter">
+      <div class="meter-head">
+        <span>spread 绽放度</span><b id="spreadVal">0.00</b>
+      </div>
+      <div class="meter-track">
+        <div id="spreadBar" class="meter-fill spread"></div>
+      </div>
+      <div class="meter-foot"><span>花苞</span><span>缓动 0.1</span><span>盛开</span></div>
+    </div>
+
+    <p id="hint">
+      <b>握拳</b>收拢 · <b>巴掌</b>绽放 · <b>竖中指</b>星系 · <b>OK</b> 烟花
+    </p>
+  </header>
+
+  <!-- ===================== 5. 右上角控制台 ===================== -->
+  <div id="panel">
+    <button id="btnPanel" class="icon-btn" title="显示 / 隐藏控制台">⚙</button>
+
+    <div id="panelBody" class="panel-body">
+      <button id="btnCamera"  class="btn">摄像头画面：开</button>
+      <button id="btnLandmarks" class="btn">手部骨架：开</button>
+      <button id="btnDemo"    class="btn">演示模式：关</button>
+
+      <div class="btn-grid">
+        <button id="btnGalaxy" class="btn">星系</button>
+        <button id="btnFirework" class="btn">烟花</button>
+      </div>
+
+      <label class="range">
+        <span>粒子数量 <b id="rangeCountVal">14000</b></span>
+        <input id="rangeCount" type="range" min="5000" max="20000" step="500" value="14000" />
+      </label>
+      <label class="range">
+        <span>粒子大小 <b id="rangeSizeVal">3.0</b></span>
+        <input id="rangeSize" type="range" min="1" max="9" step="0.1" value="3" />
+      </label>
+      <label class="range">
+        <span>光晕强度 <b id="rangeGlowVal">1.0</b></span>
+        <input id="rangeGlow" type="range" min="0.3" max="2.2" step="0.05" value="1.0" />
+      </label>
+      <label class="range">
+        <span>指尖影响半径 <b id="rangeRadiusVal">0.85</b></span>
+        <input id="rangeRadius" type="range" min="0.2" max="2.2" step="0.05" value="0.85" />
+      </label>
+
+      <!-- ============ 手型标定 / 诊断 ============ -->
+      <button id="btnCalib" class="btn">手型标定 / 诊断：关</button>
+      <div id="calibBody" class="calib-body" hidden>
+        <table class="calib-table">
+          <thead>
+            <tr><th>手指</th><th>ratio</th><th>夹角</th><th>张开度</th><th>实测范围</th></tr>
+          </thead>
+          <tbody id="calibRows"></tbody>
+        </table>
+        <p id="calibHint" class="panel-tip">
+          请对着摄像头 <b>握拳一次</b>、再 <b>完全张开一次</b>，程序会自动学习你的手型。
+        </p>
+        <div class="calib-actions">
+          <button id="btnCalibReset" class="btn">重置采样</button>
+          <button id="btnCalibApply" class="btn" disabled>应用标定</button>
+        </div>
+        <pre id="calibCode" class="calib-code" hidden></pre>
+      </div>
+
+      <p class="panel-tip">
+        手势：握拳=花苞 · 巴掌=绽放 · 1/2/3/4 根手指=数字 · 竖中指=星系 · OK=烟花<br>
+        键盘：<code>1 2 3 4</code> <code>G</code> <code>F</code> <code>H</code> 可直接预览形态<br>
+        鼠标：拖拽旋转 · 滚轮缩放 · 双击复位 · URL 加 <code>?demo=1</code> 免摄像头
+      </p>
+    </div>
+  </div>
+
+  <!-- ===================== 6. 加载 / 错误提示 ===================== -->
+  <div id="loading">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p id="loadingText">正在初始化…</p>
+      <small>首次运行需要下载 Three.js 与 MediaPipe Hands 模型（约 6MB）</small>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- ===================== 7. 摄像头故障横幅（失败时不再静默降级） ===================== -->
+  <div id="banner" hidden>
+    <div class="banner-box">
+      <h2 id="bannerTitle">⚠️ 摄像头没有启用</h2>
+      <p id="bannerMsg"></p>
+      <ul id="bannerTips"></ul>
+      <div class="banner-actions">
+        <button id="btnRetry" class="btn primary">重试连接摄像头</button>
+        <button id="btnSkip" class="btn">先用演示模式</button>
+      </div>
+      <p class="banner-note">
+        当前正在播放的是<b>演示模式</b>：花朵按程序节奏自动开合，鼠标按住=张手、松开=握拳，<b>并未使用你的摄像头</b>。
+      </p>
+    </div>
+  </div>
+
+  <!-- ES Module 入口：使用 CDN 直接引入 Three.js，无需构建步骤 -->
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "gesture-flower",
+  "private": true,
+  "version": "1.0.0",
+  "description": "手势控制花朵在指尖绽放 —— Three.js 粒子花朵 + MediaPipe Hands 21 关键点",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5500 --open",
+    "build": "vite build",
+    "preview": "vite preview --port 5500",
+    "serve": "python -m http.server 5500"
+  },
+  "optionalDependencies": {
+    "three": "^0.160.0",
+    "@mediapipe/hands": "0.4.1675469240"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
