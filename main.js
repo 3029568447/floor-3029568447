@@ -740,6 +740,10 @@ function useBudBloomPair() {
   state.shapeName = 'budBloom';
   state.morphManual = true;
   state.faceCamera = 0;
+  // ★ 必须重置自转速度：这条路径不经过 setShape()，
+  //   之前漏了这一行，导致从「星系」（spin 2.6）回来后，
+  //   形态已经变回花了、花却还在按星系的速度一直打转。
+  state.spinTarget = CONFIG.spin.idle;
   applyShapeCamera('budBloom');
   paletteState.from = currentPalette().slice();
   paletteState.to = PAL.bloom.slice();
